@@ -1,7 +1,7 @@
 # Our Awesome Project
 
-- Client: Frontend code (React)
-- Server: Backend code (Node/Express)
+- Client: Frontend code
+- Server: Backend code
 
 ## How to start
 
