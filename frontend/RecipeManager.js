@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Book, Plus, Edit2, Trash2, X, Search, Calendar, LogOut, User } from 'lucide-react';
+import { Book, Plus, Edit2, Trash2, X, Search, Calendar, LogOut, User, ShoppingCart } from 'lucide-react';
 
 // API configuration
 const API_BASE_URL = 'http://localhost:8000';
@@ -160,6 +160,99 @@ const RecipesView = ({ recipes, loading, searchQuery, setSearchQuery, selectedTa
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+const ShoppingListView = ({ shoppingList, setShoppingList }) => {
+  const toggleItem = (index) => {
+    setShoppingList(shoppingList.map((item, i) => 
+      i === index ? { ...item, checked: !item.checked } : item
+    ));
+  };
+
+  const uncheckedCount = shoppingList.filter(item => !item.checked).length;
+  const totalCount = shoppingList.length;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-3xl font-bold text-gray-800">Shopping List</h2>
+        {totalCount > 0 && (
+          <div className="text-sm text-gray-600">
+            {uncheckedCount} of {totalCount} items remaining
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        {shoppingList.length === 0 ? (
+          <div className="text-center py-12">
+            <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">No items in your list</h3>
+            <p className="text-gray-500">Add recipes to your meal planner to generate a shopping list</p>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              {shoppingList.map((item, index) => (
+                <div 
+                  key={index} 
+                  className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition group"
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={item.checked} 
+                    onChange={() => toggleItem(index)} 
+                    className="w-5 h-5 text-orange-500 rounded focus:ring-2 focus:ring-orange-500 cursor-pointer" 
+                  />
+                  <span className={`flex-1 text-lg ${
+                    item.checked 
+                      ? 'line-through text-gray-400' 
+                      : 'text-gray-800'
+                  }`}>
+                    {item.item}
+                  </span>
+                  {item.count > 1 && (
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      item.checked 
+                        ? 'bg-gray-100 text-gray-400' 
+                        : 'bg-orange-100 text-orange-600'
+                    }`}>
+                      ×{item.count}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {totalCount > 0 && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShoppingList(shoppingList.map(item => ({ ...item, checked: true })))}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-gray-700 font-medium"
+                  >
+                    Check All
+                  </button>
+                  <button
+                    onClick={() => setShoppingList(shoppingList.map(item => ({ ...item, checked: false })))}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-gray-700 font-medium"
+                  >
+                    Uncheck All
+                  </button>
+                  <button
+                    onClick={() => setShoppingList(shoppingList.filter(item => !item.checked))}
+                    className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-medium"
+                  >
+                    Clear Checked
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
@@ -540,6 +633,7 @@ const RecipeManager = () => {
   const [selectedTags, setSelectedTags] = useState([]);
   const [currentView, setCurrentView] = useState('recipes');
   const [mealPlan, setMealPlan] = useState({});
+  const [shoppingList, setShoppingList] = useState([]);
 
   useEffect(() => {
     if (user) {
@@ -547,6 +641,10 @@ const RecipeManager = () => {
       loadMealPlan();
     }
   }, [user]);
+
+  useEffect(() => {
+    generateShoppingList();
+  }, [mealPlan, recipes]);
 
   const loadRecipes = async () => {
     setLoading(true);
@@ -567,6 +665,31 @@ const RecipeManager = () => {
     } else {
       setMealPlan(result.plan || result);
     }
+  };
+
+  const generateShoppingList = () => {
+    const ingredients = {};
+    
+    // Collect all ingredients from meal plan
+    Object.values(mealPlan).forEach(dayPlan => {
+      Object.values(dayPlan).forEach(recipeId => {
+        const recipe = recipes.find(r => r.id === recipeId);
+        if (recipe && recipe.ingredients) {
+          recipe.ingredients.forEach(ing => {
+            ingredients[ing] = (ingredients[ing] || 0) + 1;
+          });
+        }
+      });
+    });
+    
+    // Convert to array format
+    const list = Object.entries(ingredients).map(([item, count]) => ({
+      item,
+      count,
+      checked: false
+    }));
+    
+    setShoppingList(list);
   };
 
   const handleAddRecipe = () => {
@@ -659,6 +782,15 @@ const RecipeManager = () => {
                 <Calendar className="w-5 h-5" />
                 <span>Meal Planner</span>
               </button>
+              <button 
+                onClick={() => setCurrentView('shopping')} 
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                  currentView === 'shopping' ? 'bg-orange-100 text-orange-600' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <ShoppingCart className="w-5 h-5" />
+                <span>Shopping List</span>
+              </button>
               <div className="flex items-center gap-2 text-gray-700">
                 <User className="w-5 h-5" />
                 <span>{user.name}</span>
@@ -706,8 +838,14 @@ const RecipeManager = () => {
             }}
           />
         )}
+
+        {currentView === 'shopping' && (
+          <ShoppingListView
+            shoppingList={shoppingList}
+            setShoppingList={setShoppingList}
+          />
+        )}
         
-        {/* TODO: Step 6 - Add Shopping List */}
       </main>
 
       {showRecipeForm && (
