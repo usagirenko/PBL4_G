@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Book, Plus, Edit2, Trash2, X, Search } from 'lucide-react';
+import { Book, Plus, Edit2, Trash2, X, Search, Calendar, LogOut, User } from 'lucide-react';
 
 // API configuration
 const API_BASE_URL = 'http://localhost:8000';
@@ -302,6 +302,114 @@ const RecipeFormModal = ({ recipe, onClose, onSave }) => {
     </div>
   );
 };
+
+const MealPlannerView = ({ recipes, mealPlan, setMealPlan, onSavePlan }) => {
+  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const meals = ['Breakfast', 'Lunch', 'Dinner'];
+
+  const addRecipeToMeal = (day, meal, recipeId) => {
+    const newPlan = {
+      ...mealPlan,
+      [day]: {
+        ...(mealPlan[day] || {}),
+        [meal]: recipeId
+      }
+    };
+    setMealPlan(newPlan);
+    onSavePlan(newPlan);
+  };
+
+  const removeRecipeFromMeal = (day, meal) => {
+    const newPlan = { ...mealPlan };
+    if (newPlan[day]) {
+      delete newPlan[day][meal];
+      if (Object.keys(newPlan[day]).length === 0) {
+        delete newPlan[day];
+      }
+    }
+    setMealPlan(newPlan);
+    onSavePlan(newPlan);
+  };
+
+  return (
+    <div>
+      <h2 className="text-3xl font-bold text-gray-800 mb-6">Weekly Meal Planner</h2>
+      
+      {recipes.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+          <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-gray-600 mb-2">No recipes available</h3>
+          <p className="text-gray-500">Add some recipes first to start planning your meals</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-lg p-6 overflow-x-auto">
+          <table className="w-full min-w-[800px]">
+            <thead>
+              <tr>
+                <th className="p-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">Day</th>
+                {meals.map(meal => (
+                  <th key={meal} className="p-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">
+                    {meal}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {days.map(day => (
+                <tr key={day} className="border-b border-gray-200 hover:bg-gray-50">
+                  <td className="p-3 font-medium text-gray-800">{day}</td>
+                  {meals.map(meal => {
+                    const recipeId = mealPlan[day]?.[meal];
+                    const recipe = recipes.find(r => r.id === recipeId);
+                    return (
+                      <td key={meal} className="p-3">
+                        {recipe ? (
+                          <div className="bg-orange-100 rounded-lg p-3 relative">
+                            <p className="text-sm font-medium text-gray-800 pr-6">{recipe.title}</p>
+                            {recipe.tags && recipe.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {recipe.tags.slice(0, 2).map((tag, idx) => (
+                                  <span key={idx} className="text-xs bg-orange-200 text-orange-700 px-2 py-0.5 rounded">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <button 
+                              onClick={() => removeRecipeFromMeal(day, meal)} 
+                              className="absolute top-2 right-2 text-red-500 hover:text-red-700 transition"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <select 
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                addRecipeToMeal(day, meal, parseInt(e.target.value));
+                                e.target.value = '';
+                              }
+                            }}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white hover:border-orange-400 transition"
+                          >
+                            <option value="">+ Add recipe</option>
+                            {recipes.map(r => (
+                              <option key={r.id} value={r.id}>{r.title}</option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
       }
       return data;
     } catch (err) {
@@ -389,7 +497,36 @@ const RecipeFormModal = ({ recipe, onClose, onSave }) => {
     }
   },
   
-  // TODO: Step 5 - Meal Plan APIs
+  // Step 5 - Meal Plan APIs
+  getMealPlan: async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/meal-plan`);
+      const data = await response.json();
+      if (!response.ok) {
+        return { error: data.detail || 'Failed to fetch meal plan' };
+      }
+      return data;
+    } catch (err) {
+      return { error: 'Network error' };
+    }
+  },
+
+  updateMealPlan: async (plan) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/meal-plan`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(plan)
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        return { error: data.detail || 'Failed to update meal plan' };
+      }
+      return data;
+    } catch (err) {
+      return { error: 'Network error' };
+    }
+  },
 };
 
 const RecipeManager = () => {
@@ -401,10 +538,13 @@ const RecipeManager = () => {
   const [editingRecipe, setEditingRecipe] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
+  const [currentView, setCurrentView] = useState('recipes');
+  const [mealPlan, setMealPlan] = useState({});
 
   useEffect(() => {
     if (user) {
       loadRecipes();
+      loadMealPlan();
     }
   }, [user]);
 
@@ -418,6 +558,15 @@ const RecipeManager = () => {
       setRecipes(result.recipes || result);
     }
     setLoading(false);
+  };
+
+  const loadMealPlan = async () => {
+    const result = await api.getMealPlan();
+    if (result.error) {
+      console.error('Failed to load meal plan:', result.error);
+    } else {
+      setMealPlan(result.plan || result);
+    }
   };
 
   const handleAddRecipe = () => {
@@ -486,9 +635,38 @@ const RecipeManager = () => {
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50">
       <nav className="bg-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-2">
-            <Book className="w-8 h-8 text-orange-500" />
-            <h1 className="text-2xl font-bold text-gray-800">Recipe Manager</h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Book className="w-8 h-8 text-orange-500" />
+              <h1 className="text-2xl font-bold text-gray-800">Recipe Manager</h1>
+            </div>
+            <div className="flex items-center gap-6">
+              <button 
+                onClick={() => setCurrentView('recipes')} 
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                  currentView === 'recipes' ? 'bg-orange-100 text-orange-600' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <Book className="w-5 h-5" />
+                <span>Recipes</span>
+              </button>
+              <button 
+                onClick={() => setCurrentView('planner')} 
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                  currentView === 'planner' ? 'bg-orange-100 text-orange-600' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <Calendar className="w-5 h-5" />
+                <span>Meal Planner</span>
+              </button>
+              <div className="flex items-center gap-2 text-gray-700">
+                <User className="w-5 h-5" />
+                <span>{user.name}</span>
+              </div>
+              <button onClick={() => setUser(null)} className="text-gray-500 hover:text-red-500">
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
       </nav>
@@ -500,20 +678,35 @@ const RecipeManager = () => {
           </div>
         )}
         
-        <RecipesView
-          recipes={filteredRecipes}
-          loading={loading}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          selectedTags={selectedTags}
-          setSelectedTags={setSelectedTags}
-          allTags={allTags}
-          onAddRecipe={handleAddRecipe}
-          onEditRecipe={handleEditRecipe}
-          onDeleteRecipe={handleDeleteRecipe}
-        />
+        {currentView === 'recipes' && (
+          <RecipesView
+            recipes={filteredRecipes}
+            loading={loading}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            selectedTags={selectedTags}
+            setSelectedTags={setSelectedTags}
+            allTags={allTags}
+            onAddRecipe={handleAddRecipe}
+            onEditRecipe={handleEditRecipe}
+            onDeleteRecipe={handleDeleteRecipe}
+          />
+        )}
+
+        {currentView === 'planner' && (
+          <MealPlannerView
+            recipes={recipes}
+            mealPlan={mealPlan}
+            setMealPlan={setMealPlan}
+            onSavePlan={async (plan) => {
+              const result = await api.updateMealPlan(plan);
+              if (result.error) {
+                setError(result.error);
+              }
+            }}
+          />
+        )}
         
-        {/* TODO: Step 5 - Add Meal Planner */}
         {/* TODO: Step 6 - Add Shopping List */}
       </main>
 
