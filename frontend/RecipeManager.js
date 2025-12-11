@@ -6,13 +6,37 @@ const API_BASE_URL = 'http://localhost:8000';
 
 const api = {
   login: async (email, password) => {
-    // TODO: Step 2 - Implement authentication
-    return { user: { name: 'Demo User', email } };
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        return { error: data.detail || 'Login failed' };
+      }
+      return data;
+    } catch (err) {
+      return { error: 'Network error' };
+    }
   },
   
   signup: async (name, email, password) => {
-    // TODO: Step 2 - Implement authentication
-    return { user: { name, email } };
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        return { error: data.detail || 'Signup failed' };
+      }
+      return data;
+    } catch (err) {
+      return { error: 'Network error' };
+    }
   },
   
   // TODO: Step 3 - Recipe CRUD APIs
@@ -56,14 +80,57 @@ const AuthScreen = ({ onAuth }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const validateForm = () => {
+    if (!email || !password) {
+      setError('Email and password are required');
+      return false;
+    }
+    if (!isLogin && !name) {
+      setError('Name is required');
+      return false;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return false;
+    }
+    if (!email.includes('@')) {
+      setError('Please enter a valid email');
+      return false;
+    }
+    return true;
+  };
 
   const handleSubmit = async () => {
-    if (isLogin) {
-      const result = await api.login(email, password);
-      onAuth(result.user);
-    } else {
-      const result = await api.signup(name, email, password);
-      onAuth(result.user);
+    setError('');
+    
+    if (!validateForm()) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (isLogin) {
+        const result = await api.login(email, password);
+        if (result.error) {
+          setError(result.error);
+        } else {
+          onAuth(result.user);
+        }
+      } else {
+        const result = await api.signup(name, email, password);
+        if (result.error) {
+          setError(result.error);
+        } else {
+          onAuth(result.user);
+        }
+      }
+    } catch (err) {
+      setError('Connection error. Please check if the backend is running.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -77,6 +144,13 @@ const AuthScreen = ({ onAuth }) => {
         <h2 className="text-2xl font-semibold text-gray-700 mb-6 text-center">
           {isLogin ? 'Welcome Back' : 'Create Account'}
         </h2>
+        
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            {error}
+          </div>
+        )}
+        
         <div className="space-y-4">
           {!isLogin && (
             <input 
@@ -103,16 +177,20 @@ const AuthScreen = ({ onAuth }) => {
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent" 
           />
           <button 
-            onClick={handleSubmit} 
-            className="w-full bg-orange-500 text-white py-3 rounded-lg font-semibold hover:bg-orange-600 transition"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="w-full bg-orange-500 text-white py-3 rounded-lg font-semibold hover:bg-orange-600 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {isLogin ? 'Sign In' : 'Sign Up'}
+            {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Sign Up')}
           </button>
         </div>
         <p className="mt-4 text-center text-gray-600">
           {isLogin ? "Don't have an account? " : "Already have an account? "}
           <button 
-            onClick={() => setIsLogin(!isLogin)} 
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError('');
+            }}
             className="text-orange-500 font-semibold hover:underline"
           >
             {isLogin ? 'Sign Up' : 'Sign In'}
