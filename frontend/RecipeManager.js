@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Book, Plus, Edit2, Trash2, X } from 'lucide-react';
+import { Book, Plus, Edit2, Trash2, X, Search } from 'lucide-react';
 
 // API configuration
 const API_BASE_URL = 'http://localhost:8000';
@@ -16,7 +16,7 @@ const api = {
       if (!response.ok) {
         return { error: data.detail || 'Login failed' };
 
-const RecipesView = ({ recipes, loading, onAddRecipe, onEditRecipe, onDeleteRecipe }) => {
+const RecipesView = ({ recipes, loading, searchQuery, setSearchQuery, selectedTags, setSelectedTags, allTags, onAddRecipe, onEditRecipe, onDeleteRecipe }) => {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -30,6 +30,62 @@ const RecipesView = ({ recipes, loading, onAddRecipe, onEditRecipe, onDeleteReci
         </button>
       </div>
 
+      {/* Search and Filter Section */}
+      <div className="mb-6 space-y-4">
+        {/* Search Bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input 
+            type="text" 
+            placeholder="Search recipes or ingredients..." 
+            value={searchQuery} 
+            onChange={(e) => setSearchQuery(e.target.value)} 
+            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent" 
+          />
+        </div>
+
+        {/* Tag Filter */}
+        {allTags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {allTags.map(tag => (
+              <button 
+                key={tag} 
+                onClick={() => setSelectedTags(
+                  selectedTags.includes(tag) 
+                    ? selectedTags.filter(t => t !== tag) 
+                    : [...selectedTags, tag]
+                )} 
+                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                  selectedTags.includes(tag) 
+                    ? 'bg-orange-500 text-white' 
+                    : 'bg-white text-gray-700 border border-gray-300 hover:border-orange-500'
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Active Filters Display */}
+        {(searchQuery || selectedTags.length > 0) && (
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <span>Showing {recipes.length} result{recipes.length !== 1 ? 's' : ''}</span>
+            {(searchQuery || selectedTags.length > 0) && (
+              <button 
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedTags([]);
+                }}
+                className="text-orange-500 hover:underline"
+              >
+                Clear all filters
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
       {loading ? (
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-orange-500 border-t-transparent"></div>
@@ -38,14 +94,32 @@ const RecipesView = ({ recipes, loading, onAddRecipe, onEditRecipe, onDeleteReci
       ) : recipes.length === 0 ? (
         <div className="bg-white rounded-xl shadow-lg p-12 text-center">
           <Book className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-600 mb-2">No recipes yet</h3>
-          <p className="text-gray-500 mb-6">Start building your recipe collection!</p>
-          <button 
-            onClick={onAddRecipe}
-            className="bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600 transition"
-          >
-            Add Your First Recipe
-          </button>
+          {searchQuery || selectedTags.length > 0 ? (
+            <>
+              <h3 className="text-xl font-semibold text-gray-600 mb-2">No recipes found</h3>
+              <p className="text-gray-500 mb-6">Try adjusting your search or filters</p>
+              <button 
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedTags([]);
+                }}
+                className="bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600 transition"
+              >
+                Clear Filters
+              </button>
+            </>
+          ) : (
+            <>
+              <h3 className="text-xl font-semibold text-gray-600 mb-2">No recipes yet</h3>
+              <p className="text-gray-500 mb-6">Start building your recipe collection!</p>
+              <button 
+                onClick={onAddRecipe}
+                className="bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600 transition"
+              >
+                Add Your First Recipe
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -325,6 +399,8 @@ const RecipeManager = () => {
   const [error, setError] = useState('');
   const [showRecipeForm, setShowRecipeForm] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTags, setSelectedTags] = useState([]);
 
   useEffect(() => {
     if (user) {
@@ -387,6 +463,21 @@ const RecipeManager = () => {
     }
   };
 
+  // Filter recipes based on search query and selected tags
+  const filteredRecipes = recipes.filter(recipe => {
+    const matchesSearch = searchQuery === '' || 
+      recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      recipe.ingredients?.some(ing => ing.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    const matchesTags = selectedTags.length === 0 || 
+      selectedTags.every(tag => recipe.tags?.includes(tag));
+    
+    return matchesSearch && matchesTags;
+  });
+
+  // Get all unique tags from recipes
+  const allTags = [...new Set(recipes.flatMap(r => r.tags || []))];
+
   if (!user) {
     return <AuthScreen onAuth={setUser} />;
   }
@@ -410,14 +501,18 @@ const RecipeManager = () => {
         )}
         
         <RecipesView
-          recipes={recipes}
+          recipes={filteredRecipes}
           loading={loading}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          selectedTags={selectedTags}
+          setSelectedTags={setSelectedTags}
+          allTags={allTags}
           onAddRecipe={handleAddRecipe}
           onEditRecipe={handleEditRecipe}
           onDeleteRecipe={handleDeleteRecipe}
         />
         
-        {/* TODO: Step 4 - Add Search and Filter */}
         {/* TODO: Step 5 - Add Meal Planner */}
         {/* TODO: Step 6 - Add Shopping List */}
       </main>
